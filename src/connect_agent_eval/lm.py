@@ -11,8 +11,7 @@ def configure_lm(settings: LMSettings = DEFAULT_LM_SETTINGS) -> dspy.LM:
         temperature=settings.temperature,
         max_tokens=settings.max_tokens,
         cache=False,
-        extra_body={"think": False},
+        think=False,
     )
     dspy.configure(lm=lm)
     return lm
-

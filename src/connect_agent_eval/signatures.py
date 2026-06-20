@@ -89,3 +89,29 @@ class MultiTurnTriage(dspy.Signature):
     escalate: str = dspy.OutputField(
         desc="この時点で有人対応が必要なら true、不要なら false。"
     )
+
+
+class NextActionPlanner(dspy.Signature):
+    """会話状態と最新発話から、次に実行する action を1つ選ぶ。
+
+    本人確認前に請求詳細を開示する action を選ばない。ツール実行が必要な場合も、
+    account_id と本人確認済み状態がそろっていることを前提に判断する。
+    """
+
+    conversation_state: str = dspy.InputField(
+        desc="intent、slots、last_agent_action、利用可能ツールを含む現在の会話状態。"
+    )
+    business_rules: str = dspy.InputField(
+        desc="本人確認、ツール実行可否、有人引き継ぎに関する業務ルール。"
+    )
+    customer_utterance: str = dspy.InputField(
+        desc="日本語の最新の顧客発話。"
+    )
+    next_action: str = dspy.OutputField(
+        desc=(
+            "次に行う処理を1つだけ出力する。許可値: "
+            "ask_identity_verification, ask_account_id, clarify_intent, "
+            "call_get_billing_summary, handoff_to_human。"
+            "説明文、理由、JSON、箇条書きは出さず、許可値の文字列だけを出力する。"
+        )
+    )
