@@ -421,6 +421,11 @@ DSPy に詳しくない人向けの説明には、以下を含める。
 DSPy_sample/
   pyproject.toml
   README.md
+  examples/
+    steps/
+      step01_connection_check.py
+      step02_single_turn_agent.py
+      step03_multi_turn_agent.py
   src/
     connect_agent_eval/
       __init__.py
@@ -452,6 +457,10 @@ DSPy_sample/
   docs/
     plan/
       dspy_ollama_connect_agent_plan.md
+    steps/
+      step01_connection_check.md
+      step02_single_turn_agent.md
+      step03_multi_turn_agent.md
   outputs/
     runs/
     optimized/
