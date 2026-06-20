@@ -2,9 +2,15 @@
 
 ## 目的
 
-Step 6 で固定した `train` / `dev` データを使い、DSPy optimizer で `NextActionPlanner` の few-shot 例を最適化する。
+Step 6 で固定した `train` / `dev` データを使い、DSPy optimizer で `NextActionPlanner` を最適化する。
 
 最初の最適化対象は `NextActionPlanner` に限定する。これは、Amazon Connect AI Agents 風の検証では「次に何をするか」の判断が、本人確認、ツール呼び出し、有人引き継ぎの安全性に直結するため。
+
+利用できる optimizer は以下。
+
+- `BootstrapFewShot`: few-shot 例の選択
+- `MIPROv2`: instruction 候補と few-shot 候補の探索
+- `GEPA`: feedback metric と reflection LM による instruction 改善
 
 ## 対象コード
 
@@ -40,6 +46,21 @@ outputs/
         metadata.json
         eval_summary.json
         fewshot_examples.jsonl
+        optimizer_artifacts.json
+      <timestamp>-mipro-v2/
+        prompt.md
+        metadata.json
+        eval_summary.json
+        fewshot_examples.jsonl
+        optimizer_artifacts.json
+      <timestamp>-gepa/
+        prompt.md
+        metadata.json
+        eval_summary.json
+        optimizer_artifacts.json
+    optimizer_logs/
+      <timestamp>-mipro-v2/
+      <timestamp>-gepa/
 ```
 
 ## 評価方法
@@ -64,8 +85,32 @@ outputs/
 PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py
 ```
 
+引数なしの場合は既存互換の `BootstrapFewShot` を実行する。optimizer を明示する場合は以下。
+
+```bash
+PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --optimizer bootstrap
+PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --optimizer mipro
+PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --optimizer gepa
+PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --optimizer all
+```
+
 Step 7 は Ollama 経由で DSPy の推論を実行するため、事前に Ollama サーバと対象モデルが利用可能である必要がある。
+
+MIPROv2 を実行する場合は、DSPy の任意依存である `optuna` が必要。
+
+```bash
+.venv/bin/pip install optuna
+```
 
 このステップでは OpenAI 互換 API ではなく、LiteLLM の `ollama_chat/gemma4:12b` provider を使う。理由は、Ollama の `think: false` が native chat API では有効だが、OpenAI 互換 API 経由では reasoning が `content` ではなく `reasoning` 側に出続け、DSPy の構造化出力パースに失敗するため。
 
 `NextActionPlanner` は `next_action` の短いラベルだけを出すタスクなので、Step 7 の `max_tokens` は `64` にしている。入力コンテキスト長を制限する目的ではなく、モデルの出力を短く止めるための設定。
+
+GEPA を実行する場合、通常推論の task model は `ollama_chat/gemma4:12b`、reflection LM は `ollama_chat/gemma4:31b` を使う。事前に以下を確認する。
+
+```bash
+ollama pull gemma4:31b
+ollama list
+```
+
+GEPA は `gemma4:31b` で失敗例を分析するため、`BootstrapFewShot` や `MIPROv2` より実行時間が長くなる。初期実行確認では `auto="light"` ではなく `max_metric_calls=36` に制限している。`auto="light"` はこの小規模データでも数百回の metric call になるため、ローカル検証では重すぎる。

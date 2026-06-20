@@ -284,7 +284,8 @@ reflection_lm = dspy.LM(
 
 optimizer = dspy.GEPA(
     metric=next_action_feedback_metric,
-    auto="light",
+    auto=None,
+    max_metric_calls=36,
     num_threads=1,
     reflection_minibatch_size=3,
     reflection_lm=reflection_lm,
@@ -304,7 +305,7 @@ optimized_module = optimizer.compile(
 - `reflection_lm=gemma4:31b`: 失敗分析と改善案生成には、通常推論より大きいモデルを使う。
 - `temperature=1.0`: reflection では改善案の探索幅を確保する。
 - `max_tokens=2048`: ローカル実行の負荷を抑えつつ、短い `NextActionPlanner` 改善には十分な上限にする。
-- `auto="light"`: 初期導入では呼び出し回数と実行時間を抑える。
+- `max_metric_calls=36`: 初期導入では呼び出し回数と実行時間を明示的に抑える。`auto="light"` は小規模データでも数百回の metric call になるため、ローカル確認には重い。
 - `reflection_minibatch_size=3`: 現在の dev set が小さいため、過度に大きくしない。
 - `num_threads=1`: Ollama の同時実行負荷を避ける。
 - `track_stats=True`: Step 8 の比較レポートで GEPA の挙動を説明できるようにする。
@@ -317,7 +318,8 @@ optimized_module = optimizer.compile(
 {
   "optimizer": "GEPA",
   "optimizer_params": {
-    "auto": "light",
+    "auto": null,
+    "max_metric_calls": 36,
     "num_threads": 1,
     "reflection_minibatch_size": 3,
     "reflection_model": "ollama_chat/gemma4:31b",
@@ -363,7 +365,7 @@ reflection_lm = dspy.LM(
 
 - `gemma4:31b` はローカル実行負荷が高い。M4 Pro / 64GB でも実行時間が長くなる可能性がある。
 - reflection の品質が低い場合、GEPA が不適切な instruction を提案する可能性がある。
-- `auto="light"` でも、BootstrapFewShot より実行時間は長くなる。
+- `max_metric_calls=36` でも、BootstrapFewShot より実行時間は長くなる。
 - GEPA のスコアが高くても、feedback metric や dev set に過適合している可能性がある。
 
 ### 完了条件
@@ -448,7 +450,7 @@ PYTHONPATH=src .venv/bin/python examples/steps/step08_comparison_report.py
 
 対策:
 
-- 初期設定は `auto="light"` に固定する。
+- 初期設定は `max_metric_calls=36` に固定する。
 - `num_threads=1` にする。
 - 実行ログに開始時刻、終了時刻、経過秒数を保存する。
 

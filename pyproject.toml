@@ -5,6 +5,7 @@ description = "DSPy + Ollama sample for Amazon Connect AI Agents style prompt ev
 requires-python = ">=3.12"
 dependencies = [
   "dspy>=3.2.1",
+  "optuna>=4.0.0",
 ]
 
 [tool.setuptools.packages.find]

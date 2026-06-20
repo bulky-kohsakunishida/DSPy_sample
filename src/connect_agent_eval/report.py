@@ -15,6 +15,13 @@ ACTION_DESCRIPTIONS = {
     "handoff_to_human": "有人対応へ引き継ぐ",
 }
 
+SOURCE_PRIORITY = {
+    "gepa": 4,
+    "mipro_v2": 3,
+    "bootstrap_fewshot": 2,
+    "baseline": 1,
+}
+
 
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
@@ -42,6 +49,11 @@ def load_prompt_record(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def is_infrastructure_failed_record(record: dict[str, Any]) -> bool:
+    cases = record["eval_summary"].get("cases", [])
+    return bool(cases) and all(case.get("error") for case in cases)
+
+
 def select_baseline(records: list[dict[str, Any]]) -> dict[str, Any]:
     baselines = [record for record in records if record.get("source") == "baseline"]
     if not baselines:
@@ -50,7 +62,14 @@ def select_baseline(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def select_best(records: list[dict[str, Any]]) -> dict[str, Any]:
-    return max(records, key=lambda record: record.get("score", 0.0))
+    return max(
+        records,
+        key=lambda record: (
+            record.get("score", 0.0),
+            SOURCE_PRIORITY.get(record.get("source", ""), 0),
+            record.get("created_at", ""),
+        ),
+    )
 
 
 def select_latest(records: list[dict[str, Any]]) -> dict[str, Any]:
@@ -158,24 +177,125 @@ def format_action_glossary(cases: list[dict[str, Any]]) -> str:
 
 def format_prompt_history(records: list[dict[str, Any]]) -> str:
     lines = [
-        "| prompt_id | source | optimizer | score | correct | path |",
-        "|---|---|---|---:|---:|---|",
+        "| prompt_id | source | optimizer | score | correct | model | reflection_lm | path |",
+        "|---|---|---|---:|---:|---|---|---|",
     ]
     for record in sorted(records, key=lambda item: item.get("created_at", "")):
         eval_summary = record["eval_summary"]
         metadata = record["metadata"]
         lines.append(
-            "| `{prompt_id}` | `{source}` | `{optimizer}` | {score} | {correct}/{total} | `{path}` |".format(
+            "| `{prompt_id}` | `{source}` | `{optimizer}` | {score} | {correct}/{total} | `{model}` | `{reflection_lm}` | `{path}` |".format(
                 prompt_id=record["prompt_id"],
                 source=record.get("source", "unknown"),
                 optimizer=metadata.get("optimizer") or "なし",
                 score=format_percent(eval_summary["score"]),
                 correct=eval_summary["correct"],
                 total=eval_summary["total"],
+                model=metadata.get("model", "unknown"),
+                reflection_lm=metadata.get("reflection_model") or "-",
                 path=record["run_dir"],
             )
         )
     return "\n".join(lines)
+
+
+def format_optimizer_comparison(
+    *,
+    baseline: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> str:
+    lines = [
+        "| optimizer | score | correct | improved | worsened | still failed | model | reflection_lm | path |",
+        "|---|---:|---:|---:|---:|---:|---|---|---|",
+    ]
+    comparison_records = latest_record_per_source(baseline=baseline, records=records)
+    for record in comparison_records:
+        metadata = record["metadata"]
+        if record["prompt_id"] == baseline["prompt_id"]:
+            improved = "-"
+            worsened = "-"
+            still_failed = "-"
+        else:
+            comparisons = compare_cases(baseline["eval_summary"], record["eval_summary"])
+            improved = str(len(comparisons["improved"]))
+            worsened = str(len(comparisons["worsened"]))
+            still_failed = str(len(comparisons["still_failed"]))
+        eval_summary = record["eval_summary"]
+        lines.append(
+            "| `{optimizer}` | {score} | {correct}/{total} | {improved} | {worsened} | {still_failed} | `{model}` | `{reflection_lm}` | `{path}` |".format(
+                optimizer=metadata.get("optimizer") or "baseline",
+                score=format_percent(eval_summary["score"]),
+                correct=eval_summary["correct"],
+                total=eval_summary["total"],
+                improved=improved,
+                worsened=worsened,
+                still_failed=still_failed,
+                model=metadata.get("model", "unknown"),
+                reflection_lm=metadata.get("reflection_model") or "-",
+                path=record["run_dir"],
+            )
+        )
+    return "\n".join(lines)
+
+
+def format_score_explanation(best_eval: dict[str, Any]) -> str:
+    return f"""`6/6` のような表記は、評価対象 {best_eval["total"]} turns のうち何件が正解したかを表します。`6/6、100%` なら、6件すべてで予測した `next_action` が正解ラベルと一致したという意味です。
+
+このプロジェクトの評価は、自然文応答のうまさではなく、各 turn で `NextActionPlanner` が選んだ `next_action` の完全一致を見ています。たとえば、期待値が `call_get_billing_summary` で、モデル出力も `call_get_billing_summary` なら1件正解です。説明文が混ざる、別 action を出す、例外で出力できない場合は不正解です。
+
+`score` は `correct / total` で計算します。今回なら `2/6 = 33.3%`、`4/6 = 66.7%`、`6/6 = 100.0%` です。評価件数が少ないため、100% はこの dev データ上で全問正解したという意味であり、本番品質を保証するものではありません。
+"""
+
+
+def format_optimizer_explanations() -> str:
+    return """### baseline
+
+optimizer を使わず、固定の `baseline_system_prompt.md` と `NextActionPlanner` の Signature だけで推論します。比較の基準です。ここで失敗したケースが、optimizer によって改善できたかを見ます。
+
+### BootstrapFewShot
+
+`BootstrapFewShot` は、train データから few-shot 例を選び、LLM に「この入力ならこの action」という具体例を追加する optimizer です。instruction 自体を大きく書き換えるよりも、判断例を足してモデルの出力を安定させる動きになります。
+
+このプロジェクトでは、`next_action_metric` で正解した train 例を使い、最大4件の bootstrapped demos と最大4件の labeled demos を候補として `NextActionPlanner` に付与します。その後、dev データで `next_action` が一致するかを評価します。
+
+### MIPROv2
+
+`MIPROv2` は、few-shot 例だけでなく instruction 候補も探索する optimizer です。複数の instruction 案と few-shot セットを作り、それらの組み合わせを評価しながら、よりスコアが高いプロンプト構成を探します。
+
+このプロジェクトでは `auto=\"light\"` で実行し、`gemma4:12b` を task model と prompt model に使います。ただし、instruction 候補生成では長めの出力が必要なため、prompt model の `max_tokens` は `1024` にしています。探索には `optuna` が必要です。
+
+### GEPA
+
+`GEPA` は、失敗例に対する feedback を使って instruction を反復的に改善する optimizer です。単に正解/不正解を見るだけでなく、「なぜ違ったか」「どのルールを優先すべきか」という feedback を reflection LM に渡し、新しい instruction 案を生成します。
+
+このプロジェクトでは、通常推論の task model は `ollama_chat/gemma4:12b`、reflection LM は `ollama_chat/gemma4:31b` です。`next_action_feedback_metric` が expected と actual の差分を説明し、GEPA がその feedback から改善案を作ります。
+
+GEPA の `auto=\"light\"` はローカル環境では約404 metric calls と重かったため、初期検証では `auto=None`, `max_metric_calls=36` に制限しています。そのため今回の GEPA 結果は「軽量予算での動作確認と初期改善」の位置づけです。
+"""
+
+
+def latest_record_per_source(
+    *,
+    baseline: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    latest_by_source: dict[str, dict[str, Any]] = {}
+    for record in records:
+        source = record.get("source", "")
+        if source == "baseline":
+            continue
+        current = latest_by_source.get(source)
+        if current is None or record.get("created_at", "") > current.get("created_at", ""):
+            latest_by_source[source] = record
+
+    ordered = [baseline]
+    ordered.extend(
+        sorted(
+            latest_by_source.values(),
+            key=lambda record: SOURCE_PRIORITY.get(record.get("source", ""), 0),
+        )
+    )
+    return ordered
 
 
 def format_evaluation_design(best: dict[str, Any]) -> str:
@@ -398,6 +518,20 @@ Step 7 で保存された評価結果を比較したところ、`{best_metadata.
 
 {format_prompt_history(records)}
 
+## optimizer 別スコア比較
+
+{format_optimizer_comparison(baseline=baseline, records=records)}
+
+この表では、各 optimizer run を同じ baseline と比較しています。GEPA run では `reflection_lm` に `ollama_chat/gemma4:31b` が記録されます。
+
+## スコア表記の読み方
+
+{format_score_explanation(best_eval)}
+
+## optimizer の種類と動き
+
+{format_optimizer_explanations()}
+
 ## アクション別の傾向
 
 {format_action_distribution(baseline_eval, best_eval)}
@@ -505,7 +639,11 @@ def run_step8_comparison_report(
     output_root: Path = Path("outputs/reports"),
 ) -> dict[str, Any]:
     index = read_json(prompt_index_path)
-    records = [load_prompt_record(record) for record in index["prompts"]]
+    records = [
+        record
+        for record in [load_prompt_record(record) for record in index["prompts"]]
+        if not is_infrastructure_failed_record(record)
+    ]
     baseline = select_baseline(records)
     best = select_best(records)
     latest = select_latest(records)
