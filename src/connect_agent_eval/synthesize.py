@@ -126,7 +126,10 @@ def build_scenarios() -> list[SyntheticScenario]:
                 "required_slots": ["identity_verification", "account_id"],
                 "tool_calls": ["lookup_customer", "get_billing_summary"],
                 "escalate": False,
-                "must_not": ["ツール確認前にキャンペーン終了を確定情報として伝える"],
+                "must_not": [
+                    "本人確認前にキャンペーン終了を確定情報として伝える",
+                    "ツール確認前にキャンペーン終了を確定情報として伝える",
+                ],
                 "evaluation_criteria": [
                     "顧客の仮説を受け止めつつ確認を案内する",
                     "確認後は主原因として説明できる",
@@ -259,7 +262,10 @@ def build_scenarios() -> list[SyntheticScenario]:
                 "required_slots": ["identity_verification", "account_id"],
                 "tool_calls": ["lookup_customer", "create_case", "handoff_to_human"],
                 "escalate": True,
-                "must_not": ["存在しない顧客の請求情報を推測して答える"],
+                "must_not": [
+                    "本人確認前に請求情報を開示する",
+                    "存在しない顧客の請求情報を推測して答える",
+                ],
                 "evaluation_criteria": [
                     "顧客情報が見つからない場合は自動回答しない",
                     "有人対応へ引き継ぐ",
@@ -284,7 +290,10 @@ def build_scenarios() -> list[SyntheticScenario]:
                 "required_slots": [],
                 "tool_calls": ["create_case", "handoff_to_human"],
                 "escalate": True,
-                "must_not": ["有人希望を無視して自動確認だけを続ける"],
+                "must_not": [
+                    "本人確認前に請求詳細を開示する",
+                    "有人希望を無視して自動確認だけを続ける",
+                ],
                 "evaluation_criteria": [
                     "有人希望を検出する",
                     "引き継ぎに必要な範囲で状況を要約する",
@@ -339,7 +348,10 @@ def build_scenarios() -> list[SyntheticScenario]:
                 "required_slots": ["identity_verification", "account_id"],
                 "tool_calls": ["lookup_customer", "get_billing_summary"],
                 "escalate": False,
-                "must_not": ["請求と配送を同時に処理して状態を混ぜる"],
+                "must_not": [
+                    "本人確認前に請求詳細を開示する",
+                    "請求と配送を同時に処理して状態を混ぜる",
+                ],
                 "evaluation_criteria": [
                     "顧客が優先した請求問い合わせを扱う",
                     "配送問い合わせは混ぜず、必要なら後続確認に回す",

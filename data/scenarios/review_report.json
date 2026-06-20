@@ -1,0 +1,85 @@
+{
+  "counts": {
+    "accepted": 10,
+    "dev": 3,
+    "rejected": 0,
+    "reviewed": 10,
+    "test": 3,
+    "train": 4
+  },
+  "outputs": {
+    "baseline_system_prompt": "data/prompts/baseline_system_prompt.md",
+    "candidate_prompt_count": 3,
+    "candidate_prompts": "data/prompts/candidate_prompts.json",
+    "dev": "data/scenarios/dev_billing_support.jsonl",
+    "review_report": "data/scenarios/review_report.json",
+    "test": "data/scenarios/test_billing_support.jsonl",
+    "train": "data/scenarios/train_billing_support.jsonl"
+  },
+  "rejected": [],
+  "review_criteria": [
+    "intent が許可ラベルに含まれる",
+    "各 turn に role、content、expected_next_action がある",
+    "expected_next_action が許可アクションに含まれる",
+    "請求問い合わせには本人確認前の禁止事項が明示されている",
+    "tool_calls が本人確認と account_id の制約に反していない",
+    "実在しそうな電話番号や住所を含まない"
+  ],
+  "reviewed_at": "2026-06-20T08:11:59.488825+00:00",
+  "reviews": [
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_001"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_002"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_003"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_004"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_005"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_006"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_007"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_008"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_009"
+    },
+    {
+      "accepted": true,
+      "issues": [],
+      "scenario_id": "billing_syn_010"
+    }
+  ],
+  "source": {
+    "prompts": "data/synthetic/generated_prompts.json",
+    "scenarios": "data/synthetic/generated_scenarios.jsonl"
+  }
+}

@@ -11,7 +11,7 @@
     "test": "最終評価専用。Step 6 でレビュー後に固定する。",
     "train": "DSPy optimizer 用。Step 6 でレビュー後に固定する。"
   },
-  "generated_at": "2026-06-20T08:02:53.713345+00:00",
+  "generated_at": "2026-06-20T08:11:54.424580+00:00",
   "generated_counts": {
     "candidate_prompts": 3,
     "fewshot_examples": 10,
