@@ -1,0 +1,11 @@
+[project]
+name = "connect-agent-eval"
+version = "0.1.0"
+description = "DSPy + Ollama sample for Amazon Connect AI Agents style prompt evaluation."
+requires-python = ">=3.12"
+dependencies = [
+  "dspy>=3.2.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
