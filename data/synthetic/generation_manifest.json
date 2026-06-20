@@ -1,0 +1,53 @@
+{
+  "adoption": {
+    "adopted_count": 0,
+    "excluded_count": 0,
+    "exclusion_reasons": [],
+    "status": "pending_step06_human_review"
+  },
+  "data_split_policy": {
+    "current_status": "review_candidates_only",
+    "dev": "チューニング中の比較用。Step 6 でレビュー後に固定する。",
+    "test": "最終評価専用。Step 6 でレビュー後に固定する。",
+    "train": "DSPy optimizer 用。Step 6 でレビュー後に固定する。"
+  },
+  "generated_at": "2026-06-20T08:02:53.713345+00:00",
+  "generated_counts": {
+    "candidate_prompts": 3,
+    "fewshot_examples": 10,
+    "scenarios": 10
+  },
+  "generation_inputs": {
+    "available_tools": [
+      "lookup_customer(account_id)",
+      "get_billing_summary(account_id, month)",
+      "create_case(account_id, reason)",
+      "handoff_to_human(summary)"
+    ],
+    "business_rules": [
+      "本人確認が済むまで請求額、明細、契約情報を開示しない。",
+      "請求問い合わせでは本人確認と account_id を必須にする。",
+      "本人確認後に lookup_customer と get_billing_summary を使う。",
+      "自動確認できない場合や顧客が希望する場合は有人対応へ引き継ぐ。"
+    ],
+    "identity_verification_policy": "この検証では、架空の account_id を受領した時点で本人確認済みとして扱う。",
+    "privacy_constraints": [
+      "実在する個人情報、電話番号、住所、アカウント ID を使わない。",
+      "架空データであることが分かる ID 体系を使う。"
+    ],
+    "response_tone": "簡潔で丁寧な日本語。内部推論や長い説明は出さない。"
+  },
+  "generation_prompt": "Step 5 の計画に基づき、請求問い合わせの代表パターン、期待 next_action、必須スロット、禁止事項、評価観点を持つレビュー前データを生成する。",
+  "generator": {
+    "model": "template_seeded_v1_no_llm",
+    "name": "connect_agent_eval.synthesize",
+    "uses_dspy_optimizer": false,
+    "uses_ollama": false
+  },
+  "outputs": {
+    "fewshot_examples": "data/synthetic/generated_fewshot_examples.jsonl",
+    "manifest": "data/synthetic/generation_manifest.json",
+    "prompts": "data/synthetic/generated_prompts.json",
+    "scenarios": "data/synthetic/generated_scenarios.jsonl"
+  }
+}

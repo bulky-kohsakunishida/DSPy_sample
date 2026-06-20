@@ -26,6 +26,7 @@ class ConversationState:
     history: list[ConversationTurn] = field(default_factory=list)
     last_agent_action: str | None = None
     handoff_required: bool = False
+    tool_results: dict[str, Any] = field(default_factory=dict)
 
     def to_prompt_context(self) -> str:
         payload: dict[str, Any] = asdict(self)
@@ -57,6 +58,10 @@ def update_slots_from_utterance(
         updated["issue_month"] = "今月"
     elif "先月" in utterance:
         updated["issue_month"] = "先月"
+    else:
+        month_match = re.search(r"(\d{1,2})月", utterance)
+        if month_match:
+            updated["issue_month"] = f"{month_match.group(1)}月"
 
     return updated
 

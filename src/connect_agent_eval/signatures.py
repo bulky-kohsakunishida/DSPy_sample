@@ -79,7 +79,8 @@ class MultiTurnTriage(dspy.Signature):
     next_action: str = dspy.OutputField(
         desc=(
             "次に行う処理。例: ask_identity_verification, ask_account_id, "
-            "confirm_issue_month, explain_next_step, handoff_to_human。"
+            "confirm_issue_month, call_lookup_customer, call_get_billing_summary, "
+            "create_case, handoff_to_human, explain_billing_summary。"
         )
     )
     response: str = dspy.OutputField(
