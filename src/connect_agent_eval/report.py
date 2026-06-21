@@ -61,6 +61,13 @@ def select_baseline(records: list[dict[str, Any]]) -> dict[str, Any]:
     return sorted(baselines, key=lambda record: record.get("created_at", ""))[0]
 
 
+def select_latest_baseline(records: list[dict[str, Any]]) -> dict[str, Any]:
+    baselines = [record for record in records if record.get("source") == "baseline"]
+    if not baselines:
+        raise ValueError("prompt_index.json に baseline の記録がありません。")
+    return sorted(baselines, key=lambda record: record.get("created_at", ""))[-1]
+
+
 def select_best(records: list[dict[str, Any]]) -> dict[str, Any]:
     return max(
         records,
@@ -209,14 +216,15 @@ def format_optimizer_comparison(
         "|---|---:|---:|---:|---:|---:|---|---|---|",
     ]
     comparison_records = latest_record_per_source(baseline=baseline, records=records)
+    comparison_baseline = comparison_records[0]
     for record in comparison_records:
         metadata = record["metadata"]
-        if record["prompt_id"] == baseline["prompt_id"]:
+        if record["prompt_id"] == comparison_baseline["prompt_id"]:
             improved = "-"
             worsened = "-"
             still_failed = "-"
         else:
-            comparisons = compare_cases(baseline["eval_summary"], record["eval_summary"])
+            comparisons = compare_cases(comparison_baseline["eval_summary"], record["eval_summary"])
             improved = str(len(comparisons["improved"]))
             worsened = str(len(comparisons["worsened"]))
             still_failed = str(len(comparisons["still_failed"]))
@@ -235,6 +243,114 @@ def format_optimizer_comparison(
                 path=record["run_dir"],
             )
         )
+    return "\n".join(lines)
+
+
+def usage_total(record: dict[str, Any], key: str) -> int | float:
+    return record["metadata"].get("usage", {}).get("total", {}).get(key, 0)
+
+
+def usage_calls(record: dict[str, Any]) -> int:
+    calls_by_model = record["metadata"].get("usage", {}).get("calls_by_model", {})
+    return sum(calls_by_model.values())
+
+
+def format_token_usage(value: int | float) -> str:
+    if not value:
+        return "-"
+    return f"{int(value):,}"
+
+
+def format_token_usage_comparison(
+    *,
+    baseline: dict[str, Any],
+    records: list[dict[str, Any]],
+) -> str:
+    lines = [
+        "| optimizer | total_tokens | prompt_tokens | completion_tokens | LM calls | model breakdown | path |",
+        "|---|---:|---:|---:|---:|---|---|",
+    ]
+    for record in latest_record_per_source(baseline=baseline, records=records):
+        metadata = record["metadata"]
+        usage = metadata.get("usage", {})
+        by_model = usage.get("by_model", {})
+        calls_by_model = usage.get("calls_by_model", {})
+        model_parts = []
+        for model, model_usage in by_model.items():
+            model_total = model_usage.get("total_tokens", 0)
+            model_calls = calls_by_model.get(model, 0)
+            model_parts.append(
+                f"`{model}`: {format_token_usage(model_total)} tokens / {model_calls} calls"
+            )
+        lines.append(
+            "| `{optimizer}` | {total_tokens} | {prompt_tokens} | {completion_tokens} | {calls} | {model_breakdown} | `{path}` |".format(
+                optimizer=metadata.get("optimizer") or "baseline",
+                total_tokens=format_token_usage(usage_total(record, "total_tokens")),
+                prompt_tokens=format_token_usage(usage_total(record, "prompt_tokens")),
+                completion_tokens=format_token_usage(usage_total(record, "completion_tokens")),
+                calls=usage_calls(record) or "-",
+                model_breakdown="<br>".join(model_parts) if model_parts else "-",
+                path=record["run_dir"],
+            )
+        )
+    return "\n".join(lines)
+
+
+def format_token_usage_explanation() -> str:
+    return """この表の token は、LLM に渡した入力と、LLM が生成した出力をモデル側の単位で数えたものです。文字数や単語数とは一致せず、モデルが内部的に処理する分割単位です。
+
+- `prompt_tokens`: LLM に渡した入力側の token 数。プロンプト、business rules、conversation_state、customer_utterance、few-shot 例、GEPA の reflection 用入力などが含まれます。
+- `completion_tokens`: LLM が生成した出力側の token 数。`next_action`、MIPROv2 の instruction 候補、GEPA の reflection や改善プロンプト案などが含まれます。
+- `total_tokens`: `prompt_tokens + completion_tokens`。処理量やコスト感を見るときの合計値です。
+- `LM calls`: LLM を呼び出した回数。1 call ごとに prompt/completion tokens が発生します。
+- `model breakdown`: モデル別の token と call 数の内訳です。GEPA では通常の `next_action` 予測を行う task model と、失敗例を振り返る reflection LM が分かれて記録されます。
+
+今回の GEPA 72 calls run では `total_tokens=102,942` のうち `prompt_tokens=97,302`、`completion_tokens=5,640` です。つまり、生成量よりも「モデルに読ませた入力」の比率が大きい run だったと読めます。"""
+
+
+def format_gepa_metric_call_progress(records: list[dict[str, Any]]) -> str:
+    gepa_records = [
+        record
+        for record in records
+        if record.get("source") == "gepa"
+        and record["metadata"].get("optimizer") == "GEPA"
+    ]
+    if not gepa_records:
+        return "GEPA の追加検証 run はまだありません。"
+
+    lines = [
+        "| prompt_id | max_metric_calls | score | correct | total_tokens | LM calls | elapsed_seconds | path |",
+        "|---|---:|---:|---:|---:|---:|---:|---|",
+    ]
+    for record in sorted(
+        gepa_records,
+        key=lambda item: (
+            item["metadata"].get("optimizer_params", {}).get("max_metric_calls") or 0,
+            item.get("created_at", ""),
+        ),
+    ):
+        metadata = record["metadata"]
+        eval_summary = record["eval_summary"]
+        params = metadata.get("optimizer_params", {})
+        elapsed_seconds = metadata.get("elapsed_seconds")
+        lines.append(
+            "| `{prompt_id}` | {max_metric_calls} | {score} | {correct}/{total} | {total_tokens} | {calls} | {elapsed_seconds} | `{path}` |".format(
+                prompt_id=record["prompt_id"],
+                max_metric_calls=params.get("max_metric_calls", "-"),
+                score=format_percent(eval_summary["score"]),
+                correct=eval_summary["correct"],
+                total=eval_summary["total"],
+                total_tokens=format_token_usage(usage_total(record, "total_tokens")),
+                calls=usage_calls(record) or "-",
+                elapsed_seconds=(
+                    f"{elapsed_seconds:.1f}"
+                    if isinstance(elapsed_seconds, int | float)
+                    else "-"
+                ),
+                path=record["run_dir"],
+            )
+        )
+
     return "\n".join(lines)
 
 
@@ -270,7 +386,7 @@ optimizer を使わず、固定の `baseline_system_prompt.md` と `NextActionPl
 
 このプロジェクトでは、通常推論の task model は `ollama_chat/gemma4:12b`、reflection LM は `ollama_chat/gemma4:31b` です。`next_action_feedback_metric` が expected と actual の差分を説明し、GEPA がその feedback から改善案を作ります。
 
-GEPA の `auto=\"light\"` はローカル環境では約404 metric calls と重かったため、初期検証では `auto=None`, `max_metric_calls=36` に制限しています。そのため今回の GEPA 結果は「軽量予算での動作確認と初期改善」の位置づけです。
+GEPA の `auto=\"light\"` はローカル環境では約404 metric calls と重かったため、初期検証では `auto=None`, `max_metric_calls=36` に制限しました。その後、36 calls では 4/6 にとどまったため、段階的に 72 calls へ拡大し、dev データ上で 6/6 に到達することを確認しました。
 """
 
 
@@ -280,15 +396,18 @@ def latest_record_per_source(
     records: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
     latest_by_source: dict[str, dict[str, Any]] = {}
+    latest_baseline = baseline
     for record in records:
         source = record.get("source", "")
         if source == "baseline":
+            if record.get("created_at", "") > latest_baseline.get("created_at", ""):
+                latest_baseline = record
             continue
         current = latest_by_source.get(source)
         if current is None or record.get("created_at", "") > current.get("created_at", ""):
             latest_by_source[source] = record
 
-    ordered = [baseline]
+    ordered = [latest_baseline]
     ordered.extend(
         sorted(
             latest_by_source.values(),
@@ -524,9 +643,23 @@ Step 7 で保存された評価結果を比較したところ、`{best_metadata.
 
 この表では、各 optimizer run を同じ baseline と比較しています。GEPA run では `reflection_lm` に `ollama_chat/gemma4:31b` が記録されます。
 
+## GEPA metric call 追加検証
+
+GEPA は初期実行で `max_metric_calls=36` に抑制していましたが、結果が 4/6 だったため、追加検証として `max_metric_calls=72` へ拡大しました。72 calls の run では 6/6、100% に到達しました。
+
+{format_gepa_metric_call_progress(records)}
+
 ## スコア表記の読み方
 
 {format_score_explanation(best_eval)}
+
+## トークン使用量
+
+{format_token_usage_comparison(baseline=baseline, records=records)}
+
+この表は、DSPy の `track_usage()` が取得した LM usage を集計したものです。過去に usage 計測なしで実行した run は `-` になります。トークン数を正確に比較するには、usage 計測実装後に optimizer を再実行した run を使います。
+
+{format_token_usage_explanation()}
 
 ## optimizer の種類と動き
 
@@ -644,7 +777,7 @@ def run_step8_comparison_report(
         for record in [load_prompt_record(record) for record in index["prompts"]]
         if not is_infrastructure_failed_record(record)
     ]
-    baseline = select_baseline(records)
+    baseline = select_latest_baseline(records)
     best = select_best(records)
     latest = select_latest(records)
     comparisons = compare_cases(baseline["eval_summary"], best["eval_summary"])

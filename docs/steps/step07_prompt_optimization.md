@@ -94,6 +94,12 @@ PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --o
 PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --optimizer all
 ```
 
+GEPA の metric call 上限を変えて検証する場合は、`--gepa-max-metric-calls` を指定する。
+
+```bash
+PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --optimizer gepa --gepa-max-metric-calls 72
+```
+
 Step 7 は Ollama 経由で DSPy の推論を実行するため、事前に Ollama サーバと対象モデルが利用可能である必要がある。
 
 MIPROv2 を実行する場合は、DSPy の任意依存である `optuna` が必要。
@@ -114,3 +120,5 @@ ollama list
 ```
 
 GEPA は `gemma4:31b` で失敗例を分析するため、`BootstrapFewShot` や `MIPROv2` より実行時間が長くなる。初期実行確認では `auto="light"` ではなく `max_metric_calls=36` に制限している。`auto="light"` はこの小規模データでも数百回の metric call になるため、ローカル検証では重すぎる。
+
+追加検証では、`max_metric_calls=36` の GEPA が 4/6 だったため、`max_metric_calls=72` に拡大した。結果は `20260620-215349-gepa` で 6/6、100% に到達した。実測では 845.9 秒、102,942 tokens、83 LM calls を使用した。内訳は task model `ollama_chat/gemma4:12b` が 90,703 tokens / 78 calls、reflection LM `ollama_chat/gemma4:31b` が 12,239 tokens / 5 calls。

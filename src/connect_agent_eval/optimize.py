@@ -58,6 +58,7 @@ class OptimizerRunConfig:
         temperature=1.0,
         max_tokens=2048,
     )
+    gepa_max_metric_calls: int = 36
 
 
 class NextActionPlannerModule(dspy.Module):
@@ -350,6 +351,25 @@ def build_prompt_text(
     return "\n\n".join(sections)
 
 
+def summarize_usage_tracker(tracker: Any) -> dict[str, Any]:
+    usage_by_model = tracker.get_total_tokens()
+    calls_by_model = {
+        lm: len(entries)
+        for lm, entries in getattr(tracker, "usage_data", {}).items()
+    }
+    total: dict[str, int | float] = {}
+    for usage in usage_by_model.values():
+        for key, value in usage.items():
+            if isinstance(value, int | float):
+                total[key] = total.get(key, 0) + value
+
+    return {
+        "total": total,
+        "by_model": usage_by_model,
+        "calls_by_model": calls_by_model,
+    }
+
+
 def save_prompt_run(
     *,
     run_dir: Path,
@@ -452,7 +472,9 @@ def run_baseline_evaluation(
 ) -> tuple[str, dict[str, Any], EvaluationResult]:
     prompt_id = f"{timestamp}-baseline"
     run_dir = output_root / "prompt_runs" / prompt_id
-    eval_result = evaluate_module(NextActionPlannerModule(), devset)
+    with dspy.track_usage() as usage_tracker:
+        eval_result = evaluate_module(NextActionPlannerModule(), devset)
+    usage = summarize_usage_tracker(usage_tracker)
     metadata = {
         "prompt_id": prompt_id,
         "created_at": created_at.isoformat(),
@@ -463,6 +485,7 @@ def run_baseline_evaluation(
         "optimizer": None,
         "trainset_size": trainset_size,
         "devset_size": len(devset),
+        "usage": usage,
         "notes": "Step 6 で固定した baseline_system_prompt を使った初回評価。",
     }
     save_prompt_run(
@@ -497,18 +520,20 @@ def run_bootstrap_fewshot_optimization(
     prompt_id = f"{timestamp}-bootstrap-fewshot"
     run_dir = output_root / "prompt_runs" / prompt_id
     start = time.monotonic()
-    optimizer = dspy.BootstrapFewShot(
-        metric=next_action_metric,
-        max_bootstrapped_demos=4,
-        max_labeled_demos=4,
-        max_rounds=1,
-    )
-    optimized_module = optimizer.compile(
-        NextActionPlannerModule(),
-        trainset=trainset,
-    )
+    with dspy.track_usage() as usage_tracker:
+        optimizer = dspy.BootstrapFewShot(
+            metric=next_action_metric,
+            max_bootstrapped_demos=4,
+            max_labeled_demos=4,
+            max_rounds=1,
+        )
+        optimized_module = optimizer.compile(
+            NextActionPlannerModule(),
+            trainset=trainset,
+        )
+        eval_result = evaluate_module(optimized_module, devset)
     elapsed_seconds = time.monotonic() - start
-    eval_result = evaluate_module(optimized_module, devset)
+    usage = summarize_usage_tracker(usage_tracker)
     fewshot_examples = extract_labeled_demos(optimized_module)
     prompt_text = build_prompt_text(
         baseline_prompt=baseline_prompt,
@@ -534,6 +559,7 @@ def run_bootstrap_fewshot_optimization(
         "trainset_size": len(trainset),
         "devset_size": len(devset),
         "elapsed_seconds": elapsed_seconds,
+        "usage": usage,
         "notes": "NextActionPlanner に限定した few-shot 最適化。",
     }
     save_prompt_run(
@@ -545,6 +571,7 @@ def run_bootstrap_fewshot_optimization(
         optimizer_artifacts={
             "predictors": extract_predictor_artifacts(optimized_module),
             "elapsed_seconds": elapsed_seconds,
+            "usage": usage,
         },
     )
     return make_index_record(
@@ -583,25 +610,27 @@ def run_mipro_v2_optimization(
         think=False,
     )
     start = time.monotonic()
-    optimizer = dspy.MIPROv2(
-        metric=next_action_metric,
-        prompt_model=prompt_lm,
-        auto="light",
-        num_threads=1,
-        max_bootstrapped_demos=4,
-        max_labeled_demos=4,
-        log_dir=str(log_dir),
-    )
-    optimized_module = optimizer.compile(
-        NextActionPlannerModule(),
-        trainset=trainset,
-        valset=devset,
-        max_bootstrapped_demos=4,
-        max_labeled_demos=4,
-        minibatch_size=max(1, min(4, len(devset))),
-    )
+    with dspy.track_usage() as usage_tracker:
+        optimizer = dspy.MIPROv2(
+            metric=next_action_metric,
+            prompt_model=prompt_lm,
+            auto="light",
+            num_threads=1,
+            max_bootstrapped_demos=4,
+            max_labeled_demos=4,
+            log_dir=str(log_dir),
+        )
+        optimized_module = optimizer.compile(
+            NextActionPlannerModule(),
+            trainset=trainset,
+            valset=devset,
+            max_bootstrapped_demos=4,
+            max_labeled_demos=4,
+            minibatch_size=max(1, min(4, len(devset))),
+        )
+        eval_result = evaluate_module(optimized_module, devset)
     elapsed_seconds = time.monotonic() - start
-    eval_result = evaluate_module(optimized_module, devset)
+    usage = summarize_usage_tracker(usage_tracker)
     fewshot_examples = extract_labeled_demos(optimized_module)
     prompt_text = build_prompt_text(
         baseline_prompt=baseline_prompt,
@@ -633,6 +662,7 @@ def run_mipro_v2_optimization(
         "trainset_size": len(trainset),
         "devset_size": len(devset),
         "elapsed_seconds": elapsed_seconds,
+        "usage": usage,
         "notes": "MIPROv2 auto=light による instruction と few-shot の最適化。",
     }
     save_prompt_run(
@@ -645,6 +675,7 @@ def run_mipro_v2_optimization(
             "predictors": extract_predictor_artifacts(optimized_module),
             "elapsed_seconds": elapsed_seconds,
             "log_dir": str(log_dir),
+            "usage": usage,
         },
     )
     return make_index_record(
@@ -670,6 +701,7 @@ def run_gepa_optimization(
     parent_prompt_id: str,
     settings: LMSettings,
     reflection_settings: LMSettings,
+    max_metric_calls: int,
 ) -> tuple[dict[str, Any], EvaluationResult]:
     prompt_id = f"{timestamp}-gepa"
     run_dir = output_root / "prompt_runs" / prompt_id
@@ -684,23 +716,25 @@ def run_gepa_optimization(
         think=False,
     )
     start = time.monotonic()
-    optimizer = dspy.GEPA(
-        metric=next_action_feedback_metric,
-        auto=None,
-        max_metric_calls=36,
-        num_threads=1,
-        reflection_minibatch_size=3,
-        reflection_lm=reflection_lm,
-        track_stats=True,
-        log_dir=str(log_dir),
-    )
-    optimized_module = optimizer.compile(
-        NextActionPlannerModule(),
-        trainset=trainset,
-        valset=devset,
-    )
+    with dspy.track_usage() as usage_tracker:
+        optimizer = dspy.GEPA(
+            metric=next_action_feedback_metric,
+            auto=None,
+            max_metric_calls=max_metric_calls,
+            num_threads=1,
+            reflection_minibatch_size=3,
+            reflection_lm=reflection_lm,
+            track_stats=True,
+            log_dir=str(log_dir),
+        )
+        optimized_module = optimizer.compile(
+            NextActionPlannerModule(),
+            trainset=trainset,
+            valset=devset,
+        )
+        eval_result = evaluate_module(optimized_module, devset)
     elapsed_seconds = time.monotonic() - start
-    eval_result = evaluate_module(optimized_module, devset)
+    usage = summarize_usage_tracker(usage_tracker)
     prompt_text = build_prompt_text(
         baseline_prompt=baseline_prompt,
         optimizer_name="GEPA",
@@ -720,7 +754,7 @@ def run_gepa_optimization(
         "optimizer": "GEPA",
         "optimizer_params": {
             "auto": None,
-            "max_metric_calls": 36,
+            "max_metric_calls": max_metric_calls,
             "num_threads": 1,
             "reflection_minibatch_size": 3,
             "reflection_model": reflection_settings.model,
@@ -732,7 +766,8 @@ def run_gepa_optimization(
         "trainset_size": len(trainset),
         "devset_size": len(devset),
         "elapsed_seconds": elapsed_seconds,
-        "notes": "GEPA max_metric_calls=36 と gemma4:31b reflection_lm による instruction 最適化。",
+        "usage": usage,
+        "notes": f"GEPA max_metric_calls={max_metric_calls} と gemma4:31b reflection_lm による instruction 最適化。",
     }
     save_prompt_run(
         run_dir=run_dir,
@@ -744,6 +779,7 @@ def run_gepa_optimization(
             "elapsed_seconds": elapsed_seconds,
             "log_dir": str(log_dir),
             "reflection_model": reflection_settings.model,
+            "usage": usage,
         },
     )
     return make_index_record(
@@ -776,6 +812,7 @@ def run_step7_prompt_optimization(
         temperature=1.0,
         max_tokens=2048,
     ),
+    gepa_max_metric_calls: int = 36,
 ) -> dict[str, Any]:
     config = OptimizerRunConfig(
         optimizer=optimizer,
@@ -785,6 +822,7 @@ def run_step7_prompt_optimization(
         output_root=output_root,
         settings=settings,
         reflection_settings=reflection_settings,
+        gepa_max_metric_calls=gepa_max_metric_calls,
     )
     return run_prompt_optimization(config)
 
@@ -858,6 +896,7 @@ def run_prompt_optimization(config: OptimizerRunConfig) -> dict[str, Any]:
                 parent_prompt_id=baseline_id,
                 settings=config.settings,
                 reflection_settings=config.reflection_settings,
+                max_metric_calls=config.gepa_max_metric_calls,
             )
             results["gepa"] = summarize_result(record, eval_result)
         else:
@@ -875,10 +914,12 @@ def run_prompt_optimization(config: OptimizerRunConfig) -> dict[str, Any]:
 
 
 def summarize_result(record: dict[str, Any], eval_result: EvaluationResult) -> dict[str, Any]:
+    metadata = read_json(Path(record["path"]) / "metadata.json")
     return {
         "prompt_id": record["prompt_id"],
         "score": eval_result.score,
         "correct": eval_result.correct,
         "total": eval_result.total,
         "path": record["path"],
+        "usage": metadata.get("usage", {}),
     }
