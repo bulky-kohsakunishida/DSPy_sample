@@ -1,0 +1,12 @@
+{
+  "created_at": "2026-06-20T21:53:49.006316+00:00",
+  "dataset_split": "dev",
+  "notes": "Step 7 GEPA run.",
+  "optimizer": "GEPA",
+  "parent_prompt_id": "20260620-215349-baseline",
+  "path": "outputs/prompts/prompt_runs/20260620-215349-gepa",
+  "prompt_id": "20260620-215349-gepa",
+  "score": 1.0,
+  "source": "gepa",
+  "target_module": "NextActionPlanner"
+}

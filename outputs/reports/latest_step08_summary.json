@@ -1,0 +1,13 @@
+{
+  "baseline_prompt_id": "20260620-215349-baseline",
+  "baseline_score": 0.3333333333333333,
+  "best_prompt_id": "20260620-215349-gepa",
+  "best_score": 1.0,
+  "improved_case_count": 4,
+  "latest_prompt_id": "20260620-215349-gepa",
+  "latest_score": 1.0,
+  "report_path": "outputs/reports/step08-comparison-curated.md",
+  "score_delta": 0.6666666666666667,
+  "still_failed_case_count": 0,
+  "worsened_case_count": 0
+}
