@@ -36,8 +36,8 @@ GEPA は reflection に強いモデルを使う前提で設計する。通常の
 - `BootstrapFewShot` 実行
 - `outputs/prompts/prompt_runs/<timestamp>-baseline`
 - `outputs/prompts/prompt_runs/<timestamp>-bootstrap-fewshot`
-- `outputs/prompts/prompt_index.json`
-- `outputs/prompts/current.json`
+- `outputs/curated/prompts/prompt_index.json`
+- `outputs/curated/prompts/current.json`
 
 Step 8 の比較レポートは [src/connect_agent_eval/report.py](../../src/connect_agent_eval/report.py) が `prompt_index.json` と各 run の `eval_summary.json` を読み込む構成になっている。
 

@@ -1,0 +1,18 @@
+{
+  "allowed_actions": [
+    "ask_identity_verification",
+    "ask_account_id",
+    "clarify_intent",
+    "call_get_billing_summary",
+    "handoff_to_human"
+  ],
+  "created_at": "2026-06-23T01:33:58.585185+00:00",
+  "prompt_path": "outputs/curated/production/next_action_planner_prompt.md",
+  "runtime": "ollama_api_chat_without_dspy",
+  "source_current_path": "outputs/curated/prompts/current.json",
+  "source_optimizer": "GEPA",
+  "source_prompt_id": "20260620-215349-gepa",
+  "source_run_dir": "outputs/prompts/prompt_runs/20260620-215349-gepa",
+  "source_score": 1.0,
+  "target_module": "NextActionPlanner"
+}

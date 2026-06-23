@@ -31,7 +31,7 @@ Step 7/8 の検証では、GEPA による最適化で dev split の `next_action
 | 改善ケース | 4 |
 | 悪化ケース | 0 |
 
-最新の比較結果は [outputs/reports/step08-comparison-curated.md](outputs/reports/step08-comparison-curated.md) にあります。
+最新の比較結果は [outputs/curated/reports/step08-comparison-curated.md](outputs/curated/reports/step08-comparison-curated.md) にあります。
 
 ## 前提
 
@@ -85,6 +85,13 @@ PYTHONPATH=src .venv/bin/python examples/steps/step07_prompt_optimization.py --o
 PYTHONPATH=src .venv/bin/python examples/steps/step08_comparison_report.py
 ```
 
+実運用に近い流れとして、DSPy で最適化した結果を DSPy なしの本番ランタイム用プロンプトへ適用する場合は Step 9 を使います。
+
+```bash
+PYTHONPATH=src .venv/bin/python examples/steps/step09_production_prompt_flow.py
+PYTHONPATH=src .venv/bin/python examples/steps/step09_production_prompt_flow.py --run-demo
+```
+
 ## DSPy / Ollama の注意点
 
 Step 7 では OpenAI 互換 API ではなく、LiteLLM の `ollama_chat/gemma4:12b` provider を使います。
@@ -107,29 +114,33 @@ docs/
 examples/steps/  ステップ別の実行スクリプト
 src/             最新の実装
 outputs/
-  prompts/       current.json と prompt_index.json を Git 管理
-  reports/       curated report と latest summary を Git 管理
+  curated/       Git 管理するレビュー済み成果物
+  prompts/       Step 7 のローカル実行成果物
+  reports/       Step 8 のローカル実行レポート
 ```
 
 ## Git 管理方針
 
 `outputs/` には実行するたびに増えるタイムスタンプ付き成果物が含まれるため、全量は Git 管理しません。
 
-Git 管理するのは、再開やレビューに必要な選別済み成果物だけです。
+Git 管理するのは、`outputs/curated/` 配下の再開やレビューに必要な選別済み成果物だけです。
 
-- `outputs/prompts/current.json`
-- `outputs/prompts/prompt_index.json`
-- `outputs/reports/latest_step08_summary.json`
-- `outputs/reports/*-curated.md`
+- `outputs/curated/prompts/current.json`
+- `outputs/curated/prompts/prompt_index.json`
+- `outputs/curated/reports/latest_step08_summary.json`
+- `outputs/curated/reports/*-curated.md`
+- `outputs/curated/production/next_action_planner_prompt.md`
+- `outputs/curated/production/next_action_planner_manifest.json`
 
-`outputs/prompts/prompt_runs/` と通常のタイムスタンプ付き report は ignore します。
+`outputs/prompts/prompt_runs/`、optimizer logs、通常のタイムスタンプ付き report は ignore します。
 
 ## 主要ドキュメント
 
 - [検証計画](docs/plan/dspy_ollama_connect_agent_plan.md)
 - [MIPROv2 / GEPA optimizer 計画](docs/plan/dspy_mipro_gepa_optimizer_plan.md)
-- [Step 7: DSPy によるプロンプトチューニング](docs/steps/step07_prompt_optimization.md)
+- [Step 7: DSPy によるプロンプト最適化](docs/steps/step07_prompt_optimization.md)
 - [Step 8: 改善前後の比較レポート](docs/steps/step08_comparison_report.md)
+- [Step 9: 本番プロンプト適用フロー](docs/steps/step09_production_prompt_flow.md)
 - [DSPy プロンプト最適化 学習ガイド](docs/learning/dspy_prompt_optimization_guide.md)
 
 ## ライセンス

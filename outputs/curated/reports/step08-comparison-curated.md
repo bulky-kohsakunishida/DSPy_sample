@@ -246,8 +246,8 @@ GEPA
 
 ## プロンプト履歴への参照
 
-- インデックス: `outputs/prompts/prompt_index.json`
-- 現在採用中: `outputs/prompts/current.json`
+- インデックス: `outputs/curated/prompts/prompt_index.json`
+- 現在採用中: `outputs/curated/prompts/current.json`
 - ベースライン実行: `outputs/prompts/prompt_runs/20260620-215349-baseline`
 - 最良実行: `outputs/prompts/prompt_runs/20260620-215349-gepa`
 - 直近実行: `outputs/prompts/prompt_runs/20260620-215349-gepa`

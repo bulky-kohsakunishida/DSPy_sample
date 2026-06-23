@@ -6,7 +6,7 @@
   "improved_case_count": 4,
   "latest_prompt_id": "20260620-215349-gepa",
   "latest_score": 1.0,
-  "report_path": "outputs/reports/step08-comparison-curated.md",
+  "report_path": "outputs/curated/reports/step08-comparison-curated.md",
   "score_delta": 0.6666666666666667,
   "still_failed_case_count": 0,
   "worsened_case_count": 0

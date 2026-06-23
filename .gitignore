@@ -5,12 +5,8 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# outputs は、レビュー済みで共有する成果物だけを Git 管理する。
+# raw run、optimizer logs、タイムスタンプ付き report は Git 管理しない。
 outputs/*
-!outputs/prompts/
-outputs/prompts/*
-!outputs/prompts/current.json
-!outputs/prompts/prompt_index.json
-!outputs/reports/
-outputs/reports/*
-!outputs/reports/latest_step08_summary.json
-!outputs/reports/*-curated.md
+!outputs/curated/
+!outputs/curated/**
